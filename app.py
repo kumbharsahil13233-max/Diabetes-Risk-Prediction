@@ -1,201 +1,283 @@
-import pickle
+import os
+import joblib
 import numpy as np
-from flask import Flask, request, render_template_string
+from flask import Flask, render_template_string, request
 
 app = Flask(__name__)
 
-# Load the trained SVM model
-with open('SVM.pkl', 'rb') as f:
-    model = pickle.load(f)
+# Load the trained SVM model safely
+MODEL_PATH = "svm.pkl"
+model = joblib.load(MODEL_PATH)
 
-# HTML + Tailwind CSS Layout
+# Embedded HTML & CSS Template with an attractive, modern UI layout
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Health Risk Prediction Portal</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>SVM Health & Lifestyle Predictor</title>
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --bg-gradient: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+            --card-bg: #ffffff;
+            --text-main: #1f2937;
+            --text-muted: #4b5563;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg-gradient);
+            color: var(--text-main);
+            margin: 0;
+            padding: 2rem 1rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 800px;
+            background: var(--card-bg);
+            padding: 2.5rem;
+            border-radius: 1rem;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            text-align: center;
+            color: var(--primary);
+            margin-bottom: 0.5rem;
+            font-size: 2rem;
+        }
+
+        p.subtitle {
+            text-align: center;
+            color: var(--text-muted);
+            margin-bottom: 2rem;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1.25rem;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        label {
+            font-weight: 600;
+            font-size: 0.875rem;
+            margin-bottom: 0.5rem;
+            color: var(--text-main);
+        }
+
+        input, select {
+            padding: 0.75rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+        }
+
+        .btn-submit {
+            grid-column: 1 / -1;
+            background-color: var(--primary);
+            color: white;
+            padding: 0.875rem;
+            border: none;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            margin-top: 1rem;
+        }
+
+        .btn-submit:hover {
+            background-color: var(--primary-hover);
+        }
+
+        .result-box {
+            margin-top: 2rem;
+            padding: 1.25rem;
+            background-color: #e0e7ff;
+            border: 1px solid #c7d2fe;
+            border-radius: 0.5rem;
+            text-align: center;
+            font-size: 1.25rem;
+            font-weight: bold;
+            color: #3730a3;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 1.5rem;
+            }
+        }
+    </style>
 </head>
-<body class="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-slate-100 min-h-screen py-10 px-4">
-    <div class="max-w-4xl mx-auto bg-slate-800/80 backdrop-blur-md rounded-2xl shadow-2xl overflow-hidden border border-slate-700">
+<body>
+    <div class="container">
+        <h1>SVM Predictor App</h1>
+        <p class="subtitle">Enter your profile information below to generate predictions</p>
         
-        <!-- Header -->
-        <div class="bg-gradient-to-r from-blue-600 to-indigo-600 px-8 py-6 text-center">
-            <h1 class="text-3xl font-extrabold tracking-tight text-white">SVM Risk Assessment Portal</h1>
-            <p class="text-blue-100 mt-1 text-sm">Enter the patient parameters below to generate an instant prediction.</p>
-        </div>
-
-        <!-- Form / Result Section -->
-        <div class="p-8">
-            {% if prediction %}
-            <div class="mb-8 p-6 rounded-xl text-center border {% if prediction == 'High' %}bg-red-950/50 border-red-500 text-red-200{% elif prediction == 'Moderate' %}bg-amber-950/50 border-amber-500 text-amber-200{% else %}bg-emerald-950/50 border-emerald-500 text-emerald-200{% endif %}">
-                <h3 class="text-lg font-medium uppercase tracking-wider">Prediction Result</h3>
-                <p class="text-4xl font-black mt-2">{{ prediction }} Risk Level</p>
-                <a href="/" class="inline-block mt-4 px-6 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm font-semibold transition">Make Another Prediction</a>
-            </div>
-            {% endif %}
-
-            <form action="/predict" method="POST" class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                
-                <!-- Age -->
-                <div>
-                    <label class="block text-sm font-medium text-slate-300 mb-1">Age</label>
-                    <input type="number" name="age" required value="{{ form_data.get('age', 35) }}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+        <form method="POST">
+            <div class="form-grid">
+                <div class="input-group">
+                    <label for="age">Age</label>
+                    <input type="number" step="any" name="age" id="age" required>
                 </div>
 
-                <!-- Gender -->
-                <div>
-                    <label class="block text-sm font-medium text-slate-300 mb-1">Gender</label>
-                    <select name="gender" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                <div class="input-group">
+                    <label for="gender">Gender</label>
+                    <select name="gender" id="gender" required>
                         <option value="0">Female / Other</option>
                         <option value="1">Male</option>
                     </select>
                 </div>
 
-                <!-- City -->
-                <div>
-                    <label class="block text-sm font-medium text-slate-300 mb-1">City Code / Category</label>
-                    <input type="number" name="city" required value="{{ form_data.get('city', 1) }}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                <div class="input-group">
+                    <label for="city">City Code</label>
+                    <input type="number" name="city" id="city" required>
                 </div>
 
-                <!-- BMI -->
-                <div>
-                    <label class="block text-sm font-medium text-slate-300 mb-1">BMI</label>
-                    <input type="step" step="0.1" name="bmi" required value="{{ form_data.get('bmi', 24.5) }}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                <div class="input-group">
+                    <label for="bmi">BMI</label>
+                    <input type="number" step="any" name="bmi" id="bmi" required>
                 </div>
 
-                <!-- Family History Diabetes -->
-                <div>
-                    <label class="block text-sm font-medium text-slate-300 mb-1">Family History of Diabetes</label>
-                    <select name="family_history_diabetes" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                <div class="input-group">
+                    <label for="family_history_diabetes">Family History Diabetes</label>
+                    <select name="family_history_diabetes" id="family_history_diabetes" required>
                         <option value="0">No</option>
                         <option value="1">Yes</option>
                     </select>
                 </div>
 
-                <!-- Physical Activity Level -->
-                <div>
-                    <label class="block text-sm font-medium text-slate-300 mb-1">Physical Activity Level (0-2)</label>
-                    <input type="number" name="physical_activity_level" required value="{{ form_data.get('physical_activity_level', 1) }}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                <div class="input-group">
+                    <label for="physical_activity_level">Physical Activity Level</label>
+                    <input type="number" step="any" name="physical_activity_level" id="physical_activity_level" required>
                 </div>
 
-                <!-- Diet Type -->
-                <div>
-                    <label class="block text-sm font-medium text-slate-300 mb-1">Diet Type (0-2)</label>
-                    <input type="number" name="diet_type" required value="{{ form_data.get('diet_type', 1) }}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                <div class="input-group">
+                    <label for="diet_type">Diet Type Code</label>
+                    <input type="number" name="diet_type" id="diet_type" required>
                 </div>
 
-                <!-- Smoking Status -->
-                <div>
-                    <label class="block text-sm font-medium text-slate-300 mb-1">Smoking Status (0-2)</label>
-                    <input type="number" name="smoking_status" required value="{{ form_data.get('smoking_status', 0) }}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                <div class="input-group">
+                    <label for="smoking_status">Smoking Status Code</label>
+                    <input type="number" name="smoking_status" id="smoking_status" required>
                 </div>
 
-                <!-- Alcohol Consumption -->
-                <div>
-                    <label class="block text-sm font-medium text-slate-300 mb-1">Alcohol Consumption (0-2)</label>
-                    <input type="number" name="alcohol_consumption" required value="{{ form_data.get('alcohol_consumption', 0) }}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                <div class="input-group">
+                    <label for="alcohol_consumption">Alcohol Consumption</label>
+                    <input type="number" step="any" name="alcohol_consumption" id="alcohol_consumption" required>
                 </div>
 
-                <!-- Hours Sleep Per Night -->
-                <div>
-                    <label class="block text-sm font-medium text-slate-300 mb-1">Hours Sleep Per Night</label>
-                    <input type="number" step="0.1" name="hours_sleep_per_night" required value="{{ form_data.get('hours_sleep_per_night', 7) }}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                <div class="input-group">
+                    <label for="hours_sleep_per_night">Hours Sleep / Night</label>
+                    <input type="number" step="any" name="hours_sleep_per_night" id="hours_sleep_per_night" required>
                 </div>
 
-                <!-- Stress Level -->
-                <div>
-                    <label class="block text-sm font-medium text-slate-300 mb-1">Stress Level (1-10)</label>
-                    <input type="number" name="stress_level" required value="{{ form_data.get('stress_level', 5) }}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                <div class="input-group">
+                    <label for="stress_level">Stress Level</label>
+                    <input type="number" step="any" name="stress_level" id="stress_level" required>
                 </div>
 
-                <!-- Fasting Blood Sugar -->
-                <div>
-                    <label class="block text-sm font-medium text-slate-300 mb-1">Fasting Blood Sugar</label>
-                    <input type="number" step="0.1" name="fasting_blood_sugar" required value="{{ form_data.get('fasting_blood_sugar', 95) }}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                <div class="input-group">
+                    <label for="fasting_blood_sugar">Fasting Blood Sugar</label>
+                    <input type="number" step="any" name="fasting_blood_sugar" id="fasting_blood_sugar" required>
                 </div>
 
-                <!-- HbA1c Level -->
-                <div>
-                    <label class="block text-sm font-medium text-slate-300 mb-1">HbA1c Level</label>
-                    <input type="number" step="0.1" name="hba1c_level" required value="{{ form_data.get('hba1c_level', 5.5) }}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                <div class="input-group">
+                    <label for="hba1c_level">HbA1c Level</label>
+                    <input type="number" step="any" name="hba1c_level" id="hba1c_level" required>
                 </div>
 
-                <!-- Blood Pressure Systolic -->
-                <div>
-                    <label class="block text-sm font-medium text-slate-300 mb-1">Blood Pressure Systolic</label>
-                    <input type="number" name="blood_pressure_systolic" required value="{{ form_data.get('blood_pressure_systolic', 120) }}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                <div class="input-group">
+                    <label for="blood_pressure_systolic">BP Systolic</label>
+                    <input type="number" step="any" name="blood_pressure_systolic" id="blood_pressure_systolic" required>
                 </div>
 
-                <!-- Blood Pressure Diastolic -->
-                <div>
-                    <label class="block text-sm font-medium text-slate-300 mb-1">Blood Pressure Diastolic</label>
-                    <input type="number" name="blood_pressure_diastolic" required value="{{ form_data.get('blood_pressure_diastolic', 80) }}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                <div class="input-group">
+                    <label for="blood_pressure_diastolic">BP Diastolic</label>
+                    <input type="number" step="any" name="blood_pressure_diastolic" id="blood_pressure_diastolic" required>
                 </div>
 
-                <!-- Waist Circumference CM -->
-                <div>
-                    <label class="block text-sm font-medium text-slate-300 mb-1">Waist Circumference (cm)</label>
-                    <input type="number" step="0.1" name="waist_circumference_cm" required value="{{ form_data.get('waist_circumference_cm', 85) }}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                <div class="input-group">
+                    <label for="waist_circumference_cm">Waist Circumference (cm)</label>
+                    <input type="number" step="any" name="waist_circumference_cm" id="waist_circumference_cm" required>
                 </div>
 
-                <!-- Income Bracket -->
-                <div>
-                    <label class="block text-sm font-medium text-slate-300 mb-1">Income Bracket (0-3)</label>
-                    <input type="number" name="income_bracket" required value="{{ form_data.get('income_bracket', 1) }}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                <div class="input-group">
+                    <label for="income_bracket">Income Bracket</label>
+                    <input type="number" name="income_bracket" id="income_bracket" required>
                 </div>
+            </div>
 
-                <!-- Submit Button -->
-                <div class="md:col-span-2 mt-4">
-                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 px-6 rounded-lg shadow-lg transition duration-200">
-                        Run Prediction
-                    </button>
-                </div>
-            </form>
+            <button type="submit" class="btn-submit">Run Prediction</button>
+        </form>
+
+        {% if prediction is not none %}
+        <div class="result-box">
+            Prediction Result: {{ prediction }}
         </div>
+        {% endif %}
     </div>
 </body>
 </html>
 """
 
-@app.route('/')
+@app.route("/", methods=["GET", "POST"])
 def home():
-    return render_template_string(HTML_TEMPLATE, prediction=None, form_data={})
+    prediction = None
+    if request.method == "POST":
+        try:
+            # Extract inputs in exact order corresponding to features found in svm.pkl
+            feature_values = [
+                float(request.form["age"]),
+                float(request.form["gender"]),
+                float(request.form["city"]),
+                float(request.form["bmi"]),
+                float(request.form["family_history_diabetes"]),
+                float(request.form["physical_activity_level"]),
+                float(request.form["diet_type"]),
+                float(request.form["smoking_status"]),
+                float(request.form["alcohol_consumption"]),
+                float(request.form["hours_sleep_per_night"]),
+                float(request.form["stress_level"]),
+                float(request.form["fasting_blood_sugar"]),
+                float(request.form["hba1c_level"]),
+                float(request.form["blood_pressure_systolic"]),
+                float(request.form["blood_pressure_diastolic"]),
+                float(request.form["waist_circumference_cm"]),
+                float(request.form["income_bracket"])
+            ]
+            
+            # Reshape into a 2D array for the scikit-learn model
+            features_array = np.array([feature_values])
+            
+            # Predict
+            pred = model.predict(features_array)
+            prediction = pred[0]
+        except Exception as e:
+            prediction = f"Error during prediction: {str(e)}"
 
-@app.route('/predict', methods=['POST'])
-def predict():
-    try:
-        # Extract features in the exact order trained by your model
-        form_data = request.form
-        features = [
-            float(form_data['age']),
-            float(form_data['gender']),
-            float(form_data['city']),
-            float(form_data['bmi']),
-            float(form_data['family_history_diabetes']),
-            float(form_data['physical_activity_level']),
-            float(form_data['diet_type']),
-            float(form_data['smoking_status']),
-            float(form_data['alcohol_consumption']),
-            float(form_data['hours_sleep_per_night']),
-            float(form_data['stress_level']),
-            float(form_data['fasting_blood_sugar']),
-            float(form_data['hba1c_level']),
-            float(form_data['blood_pressure_systolic']),
-            float(form_data['blood_pressure_diastolic']),
-            float(form_data['waist_circumference_cm']),
-            float(form_data['income_bracket'])
-        ]
-        
-        # Reshape for sklearn model prediction
-        final_features = np.array([features])
-        prediction = model.predict(final_features)[0]
-        
-        return render_template_string(HTML_TEMPLATE, prediction=prediction, form_data=form_data)
-    except Exception as e:
-        return f"<h3>Error during prediction:</h3><p>{e}</p><p><a href='/'>Go Back</a></p>"
+    return render_template_string(HTML_TEMPLATE, prediction=prediction)
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
