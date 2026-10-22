@@ -5,7 +5,7 @@ from flask import Flask, request, render_template_string
 app = Flask(__name__)
 
 # Load the trained SVM model
-with open('svm.pkl', 'rb') as f:
+with open('SVM.pkl', 'rb') as f:
     model = pickle.load(f)
 
 # HTML + Tailwind CSS Layout
